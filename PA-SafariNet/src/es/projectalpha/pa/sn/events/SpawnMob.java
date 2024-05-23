@@ -13,46 +13,66 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+
+import java.util.List;
 
 /**
  * Created by cadox on 13/12/2016.
  */
-public class SpawnMob implements Listener{
+public class SpawnMob implements Listener {
 
-    private SafariNet plugin;
+    private final SafariNet plugin;
 
-    public SpawnMob(SafariNet Main){
-        this.plugin = Main;
+    public SpawnMob(SafariNet plugin) {
+        this.plugin = plugin;
         this.plugin.getServer().getPluginManager().registerEvents(this, this.plugin);
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
-    public void onSpawn(PlayerInteractEvent e){
-        Player p = e.getPlayer();
+    public void onSpawn(PlayerInteractEvent event) {
+        Player player = event.getPlayer();
 
-        if (e.getAction() == Action.RIGHT_CLICK_AIR || e.getAction() == Action.RIGHT_CLICK_BLOCK) {
-            if(e.getHand() != EquipmentSlot.HAND) return;
-            if (e.getItem() == null || !e.getItem().hasItemMeta() || e.getItem().getItemMeta() == null || !e.getItem().getItemMeta().hasDisplayName() || e.getItem().getType() != Material.SNOWBALL) return;
-            if (!ChatColor.stripColor(e.getItem().getItemMeta().getDisplayName()).contains("Spawn")) return;
-            int id = Integer.parseInt(e.getItem().getItemMeta().getLore().get(0));
-            String s = e.getItem().getItemMeta().getLore().get(1);
+        if (isRightClickAction(event.getAction()) && event.getHand() == EquipmentSlot.HAND) {
+            ItemStack item = event.getItem();
 
-            boolean canCatch = true;
-            ApplicableRegionSet region = plugin.getWg().getRegionManager(p.getWorld()).getApplicableRegions(p.getLocation());
-            for (ProtectedRegion r : region.getRegions()) if (!r.getOwners().contains(p.getName())) canCatch = false;
+            if (isValidSpawnItem(item)) {
+                ItemMeta meta = item.getItemMeta();
+                List<String> lore = meta.getLore();
+                
+                int id = Integer.parseInt(lore.get(0));
+                String mobType = lore.get(1);
 
-            if (!canCatch) {
-                p.sendMessage(SafariNet.getInstance().getPrefix() + ChatColor.RED + "No puedes spawnear un mob en parcelas ajenas");
-                return;
+                if (canSpawnMob(player)) {
+                    SNMob mob = new SNMob(player);
+
+                    if (mob.isOwner(id)) {
+                        mob.spawnMob(id, mobType);
+                        item.setAmount(item.getAmount() - 1); // Decrease item amount by 1
+                    } else {
+                        player.sendMessage(plugin.getPrefix() + ChatColor.RED + "No eres el dueño de este huevo");
+                    }
+                } else {
+                    player.sendMessage(plugin.getPrefix() + ChatColor.RED + "No puedes spawnear un mob en parcelas ajenas");
+                }
             }
-
-            SNMob mob = new SNMob(p);
-            if (!mob.isOwner(id)) {
-               p.sendMessage(SafariNet.getInstance().getPrefix() + ChatColor.RED + "No eres el dueño de este huevo");
-                return;
-            }
-            mob.spawnMob(id, s);
-            p.getInventory().getItemInMainHand().setAmount(-1);
         }
     }
-}
+
+    private boolean isRightClickAction(Action action) {
+        return action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK;
+    }
+
+    private boolean isValidSpawnItem(ItemStack item) {
+        if (item == null || item.getType() != Material.SNOWBALL) {
+            return false;
+        }
+
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null || !meta.hasDisplayName() || !meta.hasLore()) {
+            return false;
+        }
+
+        String displayName = ChatColor.stripColor(meta.getDisplayName());
+        return displ
